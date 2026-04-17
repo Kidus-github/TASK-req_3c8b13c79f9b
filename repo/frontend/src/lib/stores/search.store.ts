@@ -2,6 +2,7 @@ import { writable, derived, get } from 'svelte/store';
 import type { SearchQuery, SearchHit, SearchFilters, SearchSort } from '$lib/types/search';
 import * as searchService from '$lib/services/search.service';
 import { currentProfileId } from './auth.store';
+import { swallowDbClosed } from '$lib/utils/db-errors';
 
 const queryText = writable('');
 const filters = writable<SearchFilters>({});
@@ -24,6 +25,10 @@ export async function executeSearch(): Promise<void> {
     const hits = await searchService.searchCards(query, profileId);
     results.set(hits);
     highlightedIds.set(hits.map(h => h.cardId));
+  } catch (err) {
+    // SearchFilters calls this from a change handler without awaiting; a
+    // closed DB here is a shutdown/teardown race, not a real failure.
+    swallowDbClosed(err);
   } finally {
     isSearching.set(false);
   }

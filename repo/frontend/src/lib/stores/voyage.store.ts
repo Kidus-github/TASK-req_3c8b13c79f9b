@@ -2,6 +2,7 @@ import { writable, derived, get } from 'svelte/store';
 import type { MissionStreak, MissionDayActivity } from '$lib/types/voyage';
 import * as voyageService from '$lib/services/voyage.service';
 import { currentProfileId } from './auth.store';
+import { swallowDbClosed } from '$lib/utils/db-errors';
 
 const streak = writable<MissionStreak>({
   id: '',
@@ -20,13 +21,19 @@ export async function loadVoyageData() {
   const profileId = get(currentProfileId);
   if (!profileId) return;
 
-  // Recalculate against today's date so a missed day resets the live streak
-  // and stardust state before the UI ever sees stale persisted values.
-  const s = await voyageService.recalculateStreak(profileId);
-  streak.set(s);
+  try {
+    // Recalculate against today's date so a missed day resets the live streak
+    // and stardust state before the UI ever sees stale persisted values.
+    const s = await voyageService.recalculateStreak(profileId);
+    streak.set(s);
 
-  const activity = await voyageService.getTodayActivity(profileId);
-  todayActivity.set(activity);
+    const activity = await voyageService.getTodayActivity(profileId);
+    todayActivity.set(activity);
+  } catch (err) {
+    // App.svelte fires this as `void loadVoyageData()` on unlock. A closed DB
+    // here is a shutdown/teardown race — nothing to load, nothing to surface.
+    swallowDbClosed(err);
+  }
 }
 
 export async function recordCardView(cardId: string) {

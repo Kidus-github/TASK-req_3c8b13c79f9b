@@ -1,6 +1,7 @@
 import { writable, derived } from 'svelte/store';
 import type { ProfileCredential, EntrySessionState } from '$lib/types/profile';
 import * as authService from '$lib/services/auth.service';
+import { swallowDbClosed } from '$lib/utils/db-errors';
 
 const profileStore = writable<ProfileCredential | null>(null);
 const sessionStatus = writable<'locked' | 'entering' | 'cooldown' | 'unlocked'>('locked');
@@ -79,7 +80,14 @@ export function logout() {
 }
 
 export async function checkExistingProfile(): Promise<boolean> {
-  return authService.hasAnyProfile();
+  try {
+    return await authService.hasAnyProfile();
+  } catch (err) {
+    // LoginGate fires this from onMount; a closed DB here means shutdown or
+    // test teardown, not a real failure. Treat as "no profile found".
+    swallowDbClosed(err);
+    return false;
+  }
 }
 
 export const currentProfile = { subscribe: profileStore.subscribe };

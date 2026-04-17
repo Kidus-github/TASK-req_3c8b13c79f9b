@@ -1,6 +1,7 @@
 import { writable, derived, get } from 'svelte/store';
 import type { WorkerJob } from '$lib/types/worker';
 import * as queueService from '$lib/services/worker-queue.service';
+import { swallowDbClosed } from '$lib/utils/db-errors';
 
 const allJobs = writable<WorkerJob[]>([]);
 const isLoading = writable(false);
@@ -12,6 +13,11 @@ export async function loadJobs() {
   try {
     const jobs = await queueService.listJobs();
     allJobs.set(jobs);
+  } catch (err) {
+    // A closed DB is a legitimate shutdown/teardown scenario (tab close, HMR,
+    // or test afterEach). There is nothing to load — leave the store as-is
+    // rather than letting the rejection surface as unhandled.
+    swallowDbClosed(err);
   } finally {
     isLoading.set(false);
   }

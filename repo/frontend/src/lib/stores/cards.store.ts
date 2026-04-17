@@ -3,6 +3,7 @@ import type { Card, CardDraft } from '$lib/types/card';
 import * as cardService from '$lib/services/card.service';
 import { currentProfileId } from './auth.store';
 import { syncService, type DataChangedPayload } from '$lib/services/sync.service';
+import { swallowDbClosed } from '$lib/utils/db-errors';
 
 const allCards = writable<Card[]>([]);
 const selectedCardId = writable<string | null>(null);
@@ -19,6 +20,11 @@ export async function loadCards() {
   try {
     const cards = await cardService.listActiveCards(profileId);
     allCards.set(cards);
+  } catch (err) {
+    // Route onMount fires this without an await; a closed DB here is a
+    // shutdown/teardown race (tab close, HMR, test afterEach), not a real
+    // failure. Swallow so it doesn't surface as unhandled.
+    swallowDbClosed(err);
   } finally {
     isLoading.set(false);
   }

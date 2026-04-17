@@ -15,15 +15,18 @@ echo " NebulaForge Creator Nebula - Test Suite"
 echo "============================================"
 echo ""
 
-FRONTEND_DIR="$(cd "$(dirname "$0")/frontend" && pwd)"
+REPO_DIR="$(cd "$(dirname "$0")" && pwd)"
 
-# Run tests inside Docker for full isolation
+# Run tests inside Docker for full isolation.
+# Mount the whole repo (not just frontend/) so tests that read README.md and
+# docker-compose.yml via `path.resolve(frontendRoot, '..')` resolve them at
+# /app (repo root inside the container), matching the on-disk layout.
 echo "[frontend][tests] Running frontend tests in Docker..."
 echo ""
 
 docker run --rm \
-  -v "$FRONTEND_DIR":/app \
-  -w /app \
+  -v "$REPO_DIR":/app \
+  -w /app/frontend \
   node:20-alpine \
   sh -c "npm ci --silent 2>/dev/null && npx vitest run --coverage --reporter=verbose 2>&1"
 
