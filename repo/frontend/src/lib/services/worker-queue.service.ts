@@ -3,6 +3,15 @@ import type { WorkerJob, WorkerJobLog, JobType, JobStatus, MonitorMetricSnapshot
 import { type AppResult, ok, err, ErrorCode } from '$lib/types/result';
 import { generateId } from '$lib/utils/id';
 
+// Monotonic timestamp source for job logs. Two consecutive addJobLog() calls
+// inside the same millisecond would otherwise share a timestamp; sortBy then
+// breaks ties by primary key (random id), scrambling insertion order.
+let lastLogTimestamp = 0;
+function nextLogTimestamp(): number {
+  lastLogTimestamp = Math.max(Date.now(), lastLogTimestamp + 1);
+  return lastLogTimestamp;
+}
+
 export async function createJob(
   type: JobType,
   priority: number = 0,
@@ -145,7 +154,7 @@ export async function addJobLog(
   await db.workerJobLogs.add({
     id: generateId(),
     jobId,
-    timestamp: Date.now(),
+    timestamp: nextLogTimestamp(),
     level,
     code,
     message,
