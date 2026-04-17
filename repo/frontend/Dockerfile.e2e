@@ -1,0 +1,20 @@
+# Playwright E2E runner for NebulaForge Creator Nebula.
+# Runs the Vite preview of the production bundle on an internal port
+# and executes the Playwright suite against it, all inside the container.
+FROM mcr.microsoft.com/playwright:v1.49.0-jammy
+
+WORKDIR /app
+
+COPY package.json package-lock.json ./
+RUN npm ci
+# Playwright's base image already ships browsers; make sure Chromium is present.
+RUN npx playwright install --with-deps chromium
+
+COPY . .
+
+ENV CI=1
+ENV E2E_BASE_URL=http://127.0.0.1:4173
+
+# Default: build + run the full Playwright suite.
+# Overrideable via `docker compose ... run e2e <custom cmd>`.
+CMD ["sh", "-lc", "npm run build && npx playwright test"]

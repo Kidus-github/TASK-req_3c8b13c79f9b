@@ -1,0 +1,387 @@
+{
+  "openapi": "3.1.0",
+  "info": {
+    "title": "NebulaForge Star Map SDK",
+    "version": "1.1.0",
+    "description": "In-browser API for embedding an interactive 3D star cloud. All calls are offline, in-process JavaScript method invocations against the SDK instance returned by NebulaForge.embed(element, config). Layer visibility and drawing operate on real THREE.js scene groups — toggling a known layer hides/shows it at render time, and drawing captures ground-plane points into the drawing layer.",
+    "contact": {
+      "name": "NebulaForge",
+      "url": "https://local/nebulaforge"
+    },
+    "license": {
+      "name": "Local use"
+    }
+  },
+  "servers": [
+    {
+      "url": "local://sdk",
+      "description": "In-browser JavaScript module (no network transport)"
+    }
+  ],
+  "tags": [
+    { "name": "lifecycle", "description": "Construction and teardown" },
+    { "name": "features", "description": "Feature/query and highlighting" },
+    { "name": "layers", "description": "Scene-layer visibility" },
+    { "name": "drawing", "description": "Drawing and measurement tools" },
+    { "name": "events", "description": "Event subscriptions" }
+  ],
+  "paths": {
+    "/embed": {
+      "post": {
+        "tags": ["lifecycle"],
+        "summary": "NebulaForge.embed(element, config)",
+        "description": "Creates an SDK instance inside the given DOM element.",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": { "$ref": "#/components/schemas/SDKEmbedConfig" }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "SDK instance",
+            "content": {
+              "application/json": {
+                "schema": { "$ref": "#/components/schemas/StarMapSDK" }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/setLayerVisibility": {
+      "post": {
+        "tags": ["layers"],
+        "summary": "sdk.setLayerVisibility(layerId, visible)",
+        "description": "Sets the visibility flag of a scene layer group. Known layer ids are 'stars', 'highlights' and 'drawing'; toggling any of these updates group.visible on the underlying THREE.Group so the render loop honors the change. Unknown ids are accepted and remembered but produce no scene-side effect; the emitted layerChange event includes a 'known' boolean so embedders can distinguish the two cases.",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "properties": {
+                  "layerId": { "type": "string", "enum": ["stars", "highlights", "drawing"] },
+                  "visible": { "type": "boolean" }
+                },
+                "required": ["layerId", "visible"]
+              }
+            }
+          }
+        },
+        "responses": { "204": { "description": "Layer visibility updated; layerChange event emitted" } }
+      }
+    },
+    "/getLayerVisibility": {
+      "post": {
+        "tags": ["layers"],
+        "summary": "sdk.getLayerVisibility(layerId)",
+        "responses": {
+          "200": {
+            "description": "Current visibility flag",
+            "content": { "application/json": { "schema": { "type": "boolean" } } }
+          }
+        }
+      }
+    },
+    "/listLayers": {
+      "post": {
+        "tags": ["layers"],
+        "summary": "sdk.listLayers()",
+        "responses": {
+          "200": {
+            "description": "Known layer ids",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "array",
+                  "items": { "type": "string" }
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/queryFeatures": {
+      "post": {
+        "tags": ["features"],
+        "summary": "sdk.queryFeatures(filter)",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": { "$ref": "#/components/schemas/FeatureFilter" }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Matching features",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "array",
+                  "items": { "$ref": "#/components/schemas/CardFeature" }
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/highlightFeatures": {
+      "post": {
+        "tags": ["features"],
+        "summary": "sdk.highlightFeatures(ids)",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "array",
+                "items": { "type": "string" }
+              }
+            }
+          }
+        },
+        "responses": { "204": { "description": "Highlights applied" } }
+      }
+    },
+    "/clearHighlights": {
+      "post": {
+        "tags": ["features"],
+        "summary": "sdk.clearHighlights()",
+        "responses": { "204": { "description": "Highlights cleared" } }
+      }
+    },
+    "/startDrawing": {
+      "post": {
+        "tags": ["drawing"],
+        "summary": "sdk.startDrawing(mode)",
+        "description": "Enters an interactive drawing mode. Canvas clicks capture points on the y=0 ground plane and render as points/lines/polygon in the drawing layer. Emits drawStart; every captured point emits drawProgress.",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "string",
+                "enum": ["point", "line", "polygon"]
+              }
+            }
+          }
+        },
+        "responses": { "204": { "description": "Drawing started; drawStart emitted" } }
+      }
+    },
+    "/addDrawingPoint": {
+      "post": {
+        "tags": ["drawing"],
+        "summary": "sdk.addDrawingPoint(point)",
+        "description": "Append a 3D point to the current drawing programmatically. No-op if no drawing is active.",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": { "$ref": "#/components/schemas/Vec3" }
+            }
+          }
+        },
+        "responses": { "204": { "description": "Point appended; drawProgress emitted" } }
+      }
+    },
+    "/stopDrawing": {
+      "post": {
+        "tags": ["drawing"],
+        "summary": "sdk.stopDrawing()",
+        "description": "Finalize the drawing. Returns { mode, points, measurement } and emits drawComplete with the same payload. measurement is total length for lines, XZ shoelace area for polygons, and null for points.",
+        "responses": {
+          "200": {
+            "description": "Final drawing payload",
+            "content": {
+              "application/json": {
+                "schema": { "$ref": "#/components/schemas/DrawResult" }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/cancelDrawing": {
+      "post": {
+        "tags": ["drawing"],
+        "summary": "sdk.cancelDrawing()",
+        "description": "Discard any in-progress drawing. Emits drawCancelled. No-op if no drawing is active.",
+        "responses": { "204": { "description": "Drawing cancelled; drawCancelled emitted" } }
+      }
+    },
+    "/measureDistance": {
+      "post": {
+        "tags": ["drawing"],
+        "summary": "sdk.measureDistance(points)",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "array",
+                "items": { "$ref": "#/components/schemas/Vec3" }
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Total distance",
+            "content": {
+              "application/json": {
+                "schema": { "$ref": "#/components/schemas/Measurement" }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/measureArea": {
+      "post": {
+        "tags": ["drawing"],
+        "summary": "sdk.measureArea(points)",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "array",
+                "items": { "$ref": "#/components/schemas/Vec3" }
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Polygon area (shoelace, XZ plane)",
+            "content": {
+              "application/json": {
+                "schema": { "$ref": "#/components/schemas/Measurement" }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/on": {
+      "post": {
+        "tags": ["events"],
+        "summary": "sdk.on(event, handler)",
+        "description": "Subscribe to an SDK event. Returns an unsubscribe function.",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "properties": {
+                  "event": {
+                    "type": "string",
+                    "description": "Events the embed runtime emits. Keep this list in lockstep with the SDKEventName TypeScript union and the Events list in the SDK Docs page.",
+                    "enum": ["starClick", "drawStart", "drawProgress", "drawComplete", "drawCancelled", "measureComplete", "layerChange"]
+                  }
+                },
+                "required": ["event"]
+              }
+            }
+          }
+        },
+        "responses": { "200": { "description": "Unsubscribe handle" } }
+      }
+    },
+    "/destroy": {
+      "post": {
+        "tags": ["lifecycle"],
+        "summary": "sdk.destroy()",
+        "responses": { "204": { "description": "SDK instance disposed" } }
+      }
+    }
+  },
+  "components": {
+    "schemas": {
+      "Vec3": {
+        "type": "object",
+        "properties": {
+          "x": { "type": "number" },
+          "y": { "type": "number" },
+          "z": { "type": "number" }
+        },
+        "required": ["x", "y", "z"]
+      },
+      "SDKStarData": {
+        "type": "object",
+        "properties": {
+          "id": { "type": "string" },
+          "x": { "type": "number" },
+          "y": { "type": "number" },
+          "z": { "type": "number" },
+          "color": { "type": "string", "description": "Hex color" },
+          "label": { "type": "string" },
+          "size": { "type": "number" }
+        },
+        "required": ["id", "x", "y", "z", "color"]
+      },
+      "SDKEmbedConfig": {
+        "type": "object",
+        "properties": {
+          "stars": { "type": "array", "items": { "$ref": "#/components/schemas/SDKStarData" } },
+          "background": { "type": "string" },
+          "controls": { "type": "boolean", "default": true },
+          "lighting": { "type": "string", "description": "Optional lighting preset identifier" },
+          "onStarClick": { "type": "string", "description": "Function (star) => void. Invoked only when the click lands on a star; misses are ignored. To observe clicks that miss, subscribe to the `starClick` event via sdk.on (payload may be null)." }
+        },
+        "required": ["stars"]
+      },
+      "FeatureFilter": {
+        "type": "object",
+        "description": "Narrow filter shape — the runtime currently only applies the `ids` filter. Other fields are intentionally omitted until the runtime implements them.",
+        "properties": {
+          "ids": { "type": "array", "items": { "type": "string" } }
+        }
+      },
+      "CardFeature": {
+        "type": "object",
+        "properties": {
+          "id": { "type": "string" },
+          "position": { "$ref": "#/components/schemas/Vec3" },
+          "color": { "type": "string" },
+          "label": { "type": "string" }
+        },
+        "required": ["id", "position", "color"]
+      },
+      "Measurement": {
+        "type": "object",
+        "properties": {
+          "value": { "type": "number" },
+          "unit": { "type": "string" },
+          "points": { "type": "array", "items": { "$ref": "#/components/schemas/Vec3" } }
+        },
+        "required": ["value", "unit", "points"]
+      },
+      "DrawResult": {
+        "type": "object",
+        "properties": {
+          "mode": { "type": "string", "enum": ["point", "line", "polygon"] },
+          "points": { "type": "array", "items": { "$ref": "#/components/schemas/Vec3" } },
+          "measurement": {
+            "oneOf": [
+              { "type": "null" },
+              {
+                "type": "object",
+                "properties": {
+                  "value": { "type": "number" },
+                  "unit": { "type": "string" }
+                },
+                "required": ["value", "unit"]
+              }
+            ]
+          }
+        },
+        "required": ["mode", "points", "measurement"]
+      },
+      "StarMapSDK": {
+        "type": "object",
+        "description": "Opaque handle returned by NebulaForge.embed. See method paths for operations."
+      }
+    }
+  }
+}

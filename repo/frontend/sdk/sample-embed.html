@@ -1,0 +1,71 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>NebulaForge Star Map SDK - Sample Embed</title>
+  <style>
+    body { margin: 0; background: #0a0a1e; color: #e2e8f0; font-family: system-ui; }
+    #controls { padding: 16px; display: flex; gap: 8px; }
+    #star-map { width: 100%; height: calc(100vh - 60px); }
+    button { padding: 8px 16px; border-radius: 8px; border: 1px solid #475569; background: #1e293b; color: #e2e8f0; cursor: pointer; }
+    button:hover { background: #334155; }
+    #output { position: fixed; bottom: 16px; left: 16px; background: rgba(15,23,42,0.9); padding: 12px; border-radius: 8px; font-size: 12px; max-width: 300px; }
+  </style>
+</head>
+<body>
+  <div id="controls">
+    <button onclick="highlightFirst()">Highlight First Star</button>
+    <button onclick="clearAll()">Clear Highlights</button>
+    <button onclick="measureStars()">Measure Distance</button>
+    <button onclick="queryAll()">Query All</button>
+  </div>
+  <div id="star-map"></div>
+  <div id="output">Click a star to see details here.</div>
+
+  <!--
+    Loads the real built SDK bundle produced by `npm run build:sdk`.
+    The file lives at `/sdk/nebulaforge-sdk.js` inside the public folder
+    and exposes a global `NebulaForge.embed`. Fully offline once cached.
+  -->
+  <script src="../public/sdk/nebulaforge-sdk.js"></script>
+  <script>
+    const { embed } = window.NebulaForge;
+
+    const sampleStars = [
+      { id: 's1', x: 0, y: 0, z: 0, color: '#3b82f6', label: 'Origin Star', size: 2 },
+      { id: 's2', x: 5, y: 3, z: -2, color: '#22d3ee', label: 'Cyan Nebula', size: 1.5 },
+      { id: 's3', x: -4, y: 1, z: 3, color: '#a3e635', label: 'Green Giant', size: 1 },
+      { id: 's4', x: 3, y: -2, z: 5, color: '#facc15', label: 'Golden Sun', size: 1.2 },
+      { id: 's5', x: -6, y: 4, z: -3, color: '#f97316', label: 'Orange Dwarf', size: 0.8 },
+      { id: 's6', x: 2, y: 6, z: 1, color: '#3b82f6', label: 'Blue Nova', size: 1.3 },
+      { id: 's7', x: -3, y: -4, z: -1, color: '#22d3ee', label: 'Ice Crystal', size: 0.9 },
+      { id: 's8', x: 7, y: 0, z: -4, color: '#a3e635', label: 'Emerald Point', size: 1.1 },
+    ];
+
+    const sdk = embed(document.getElementById('star-map'), {
+      stars: sampleStars,
+      background: '#050510',
+      controls: true,
+      onStarClick: (star) => {
+        document.getElementById('output').textContent = `Clicked: ${star.label} (${star.id})`;
+      },
+    });
+
+    // Expose for button handlers
+    window.highlightFirst = () => sdk.highlightFeatures(['s1', 's2']);
+    window.clearAll = () => sdk.clearHighlights();
+    window.measureStars = () => {
+      const result = sdk.measureDistance([
+        { x: 0, y: 0, z: 0 },
+        { x: 5, y: 3, z: -2 }
+      ]);
+      document.getElementById('output').textContent = `Distance: ${result.value.toFixed(2)} ${result.unit}`;
+    };
+    window.queryAll = () => {
+      const features = sdk.queryFeatures({});
+      document.getElementById('output').textContent = `Found ${features.length} features`;
+    };
+  </script>
+</body>
+</html>
