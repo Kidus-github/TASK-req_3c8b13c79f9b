@@ -6,6 +6,7 @@ import { SDK_EVENT_NAMES, type SDKEventName } from '$lib/types/sdk';
 
 const here = path.dirname(fileURLToPath(import.meta.url));
 const frontendRoot = path.resolve(here, '../..');
+const repoRoot = path.resolve(here, '../../..');
 
 function read(rel: string): string {
   return readFileSync(path.join(frontendRoot, rel), 'utf8');
@@ -166,7 +167,7 @@ describe('SDK contract parity: runtime ↔ types ↔ spec ↔ docs', () => {
   it('SDK spec version string matches the SDK docs and README references', () => {
     const spec = JSON.parse(read('public/sdk/openapi-v1.json'));
     const docs = read('src/routes/SDKDocs.svelte');
-    const readme = readFileSync(path.resolve(frontendRoot, '..', 'README.md'), 'utf8');
+    const readme = readFileSync(path.join(repoRoot, 'README.md'), 'utf8');
     const checklist = read('tests/pwa-checklist.md');
 
     expect(spec.info.version).toBe('1.1.0');

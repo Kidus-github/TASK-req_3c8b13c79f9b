@@ -39,9 +39,9 @@ services:
   frontend-test:
     profiles: ["test"]
     image: node:20-alpine
-    working_dir: /app
+    working_dir: /app/frontend
     volumes:
-      - ./frontend:/app
+      - .:/app
     command: >
       sh -lc "
         npm ci &&
