@@ -95,7 +95,7 @@
       on:click={closeProgressDrawer}
     ></button>
 
-    <aside
+    <div
       class="absolute right-0 top-0 bottom-0 w-full sm:w-96 bg-surface-900 border-l
              border-surface-700 shadow-2xl overflow-y-auto pointer-events-auto"
       role="dialog"
@@ -226,6 +226,6 @@
           </div>
         {/if}
       </section>
-    </aside>
+    </div>
   </div>
 {/if}
