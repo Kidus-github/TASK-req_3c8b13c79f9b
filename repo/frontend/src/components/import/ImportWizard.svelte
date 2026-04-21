@@ -44,10 +44,17 @@
     availableJsonRules = rules
       .filter(r => r.sourceType === 'json' && (r.status === 'active' || r.status === 'canary_passed'))
       .map(r => ({ id: r.id, name: r.name, status: r.status }));
-    if (!selectedJsonRuleId && availableJsonRules.length > 0) {
-      const active = availableJsonRules.find(r => r.status === 'active');
-      selectedJsonRuleId = active?.id ?? availableJsonRules[0].id;
-    }
+  }
+
+  // Keep the selected JSON rule anchored to a valid option even when the
+  // options list refreshes before the select is mounted or when the prior
+  // selection disappears after an update.
+  $: if (
+    availableJsonRules.length > 0 &&
+    (!selectedJsonRuleId || !availableJsonRules.some(rule => rule.id === selectedJsonRuleId))
+  ) {
+    const active = availableJsonRules.find(rule => rule.status === 'active');
+    selectedJsonRuleId = active?.id ?? availableJsonRules[0].id;
   }
 
   async function handleFile(event: CustomEvent<{ file: File; type: string }>) {

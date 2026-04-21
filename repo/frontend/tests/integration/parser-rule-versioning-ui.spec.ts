@@ -1,39 +1,22 @@
-import { describe, it, expect, beforeEach, afterEach, vi } from 'vitest';
-import { render, fireEvent } from '@testing-library/svelte';
-import { writable } from 'svelte/store';
+import { afterEach, beforeEach, describe, expect, it } from 'vitest';
+import { cleanup, fireEvent, render, waitFor } from '@testing-library/svelte';
 
-// Mock the auth store before anything imports from it so the route sees a
-// stable profile id without running the real unlock flow.
-vi.mock('$lib/stores/auth.store', () => {
-  const currentProfileId = writable('test-profile');
-  return {
-    currentProfileId,
-    isUnlocked: writable(true),
-    currentProfile: writable({ id: 'test-profile', username: 'tester' }),
-    entryStatus: writable('unlocked'),
-    cooldownRemaining: writable(0),
-    error: writable(null),
-    registering: writable(false),
-    login: vi.fn(),
-    register: vi.fn(),
-    logout: vi.fn(),
-    checkExistingProfile: vi.fn().mockResolvedValue(true),
-  };
-});
+import ParserRules from '../../src/routes/ParserRules.svelte';
 
 import { createTestDb, destroyTestDb } from '../helpers/db-factory';
 import { type NebulaDB, setDbFactory } from '$lib/db/connection';
-import ParserRules from '../../src/routes/ParserRules.svelte';
-import VersionHistory from '../../src/components/parser-rules/VersionHistory.svelte';
+import { register, logout } from '$lib/stores/auth.store';
+import { clearToasts } from '$lib/stores/toast.store';
 import * as parserService from '$lib/services/parser-rule.service';
 import type { ParsingRuleSet, RuleSelector, FieldMapping } from '$lib/types/parser-rule';
 
 let testDb: NebulaDB;
-const PROFILE_ID = 'test-profile';
+let profileId: string;
 
 const selectors: RuleSelector[] = [
   { selectorType: 'css', expression: 'article', description: 'root' },
 ];
+
 const mappings: FieldMapping[] = [
   { sourceSelector: '.title', targetField: 'title' },
   { sourceSelector: '.body', targetField: 'body' },
@@ -41,101 +24,96 @@ const mappings: FieldMapping[] = [
   { sourceSelector: '.mood', targetField: 'mood' },
 ];
 
-beforeEach(() => {
+async function seedRule(overrides: Partial<ParsingRuleSet> = {}): Promise<ParsingRuleSet> {
+  const created = await parserService.createRuleSet(
+    profileId,
+    overrides.name ?? 'My Rule',
+    overrides.sourceType ?? 'html',
+    overrides.selectors ?? selectors,
+    overrides.fieldMappings ?? mappings
+  );
+  if (!created.ok) throw new Error('Failed to seed parser rule');
+  if (overrides.status && overrides.status !== 'draft') {
+    await testDb.parsingRuleSets.update(created.data.id, { status: overrides.status });
+  }
+  return (await testDb.parsingRuleSets.get(created.data.id))!;
+}
+
+beforeEach(async () => {
   testDb = createTestDb();
   setDbFactory(() => testDb);
+  clearToasts();
+  await register('demo', 'demopass1');
+  profileId = (await testDb.profiles.toCollection().first())!.id;
 });
 
 afterEach(async () => {
+  cleanup();
+  clearToasts();
+  logout();
   setDbFactory(null);
   await destroyTestDb(testDb);
 });
 
-async function seedRule(overrides: Partial<ParsingRuleSet> = {}): Promise<ParsingRuleSet> {
-  const r = await parserService.createRuleSet(PROFILE_ID, overrides.name ?? 'My Rule', 'html', selectors, mappings);
-  if (!r.ok) throw new Error('seed failed');
-  if (overrides.status && overrides.status !== 'draft') {
-    await testDb.parsingRuleSets.update(r.data.id, { status: overrides.status });
-  }
-  return (await testDb.parsingRuleSets.get(r.data.id))!;
-}
-
 describe('parser-rule versioning in the UI', () => {
-  it('renders rules with a version badge and a History button', async () => {
+  it('renders seeded rules with their current version and history action', async () => {
     await seedRule({ name: 'HistoryTest' });
 
-    const { findAllByTestId } = render(ParserRules);
+    const { findByText, findAllByTestId } = render(ParserRules);
 
+    expect(await findByText('HistoryTest')).toBeTruthy();
     const versionEls = await findAllByTestId('rule-version');
-    expect(versionEls[0].textContent).toContain('v1');
-
-    const historyBtns = await findAllByTestId('rule-history');
-    expect(historyBtns.length).toBeGreaterThan(0);
+    expect(versionEls.some((el) => el.textContent?.includes('v1'))).toBe(true);
+    expect((await findAllByTestId('rule-history')).length).toBeGreaterThan(0);
   });
 
-  it('updateRuleSet creates a new version observable in VersionHistory', async () => {
-    const rule = await seedRule({ name: 'VersionedRule' });
+  it('editing a draft rule through the route creates a new version visible in Version History', async () => {
+    const rule = await seedRule({ name: 'Versioned Rule' });
 
-    // Save v2.
-    const newMappings = [...mappings, { sourceSelector: '.tags', targetField: 'tags' }];
-    const result = await parserService.updateRuleSet(rule.id, selectors, newMappings);
+    const { container, findAllByTestId, findByText } = render(ParserRules);
+    await fireEvent.click((await findAllByTestId('rule-edit'))[0]);
+
+    const selectorInput = container.querySelector<HTMLInputElement>('input[placeholder="Selector expression"]');
+    expect(selectorInput).toBeTruthy();
+    await fireEvent.input(selectorInput!, { target: { value: 'article.card' } });
+    await fireEvent.click(await findByText('Save Rule'));
+
+    await waitFor(async () => {
+      const updated = await testDb.parsingRuleSets.get(rule.id);
+      expect(updated?.ruleVersion).toBe(2);
+    });
+
+    expect(await findByText('current')).toBeTruthy();
+    const versionRows = await findAllByTestId('version-row');
+    expect(versionRows.map((row) => row.getAttribute('data-version'))).toEqual(['2', '1']);
+    expect(container.textContent).toContain('[css] article.card');
+  });
+
+  it('activating a canary-passed rule archives the previously active rule with the same name', async () => {
+    const activeRule = await seedRule({ name: 'LiveRule' });
+    await testDb.parsingRuleSets.update(activeRule.id, { status: 'active' });
+
+    const replacement = await parserService.createRuleSet(profileId, 'LiveRule', 'html', selectors, mappings);
+    if (!replacement.ok) throw new Error('Failed to create replacement rule');
+    await testDb.parsingRuleSets.update(replacement.data.id, { status: 'canary_passed' });
+
+    const result = await parserService.activateRuleSet(replacement.data.id);
     expect(result.ok).toBe(true);
-    if (!result.ok) return;
-    expect(result.data.ruleVersion).toBe(2);
 
-    const updated = await testDb.parsingRuleSets.get(rule.id);
-    expect(updated).toBeDefined();
-
-    const { findAllByTestId } = render(VersionHistory, { props: { rule: updated! } });
-    const rows = await findAllByTestId('version-row');
-    const versions = rows.map(r => r.getAttribute('data-version'));
-    expect(versions).toContain('1');
-    expect(versions).toContain('2');
+    const previous = await testDb.parsingRuleSets.get(activeRule.id);
+    const current = await testDb.parsingRuleSets.get(replacement.data.id);
+    expect(previous?.status).toBe('archived');
+    expect(current?.status).toBe('active');
   });
 
-  it('activating a newer rule with the same name archives the older one', async () => {
-    const v1 = await seedRule({ name: 'LiveRule' });
-    await testDb.parsingRuleSets.update(v1.id, { status: 'active' });
-
-    // A cloned-as-new rule takes over.
-    const cloned = await parserService.createRuleSet(PROFILE_ID, 'LiveRule', 'html', selectors, mappings);
-    if (!cloned.ok) throw new Error('clone failed');
-    await testDb.parsingRuleSets.update(cloned.data.id, { status: 'canary_passed' });
-
-    const activated = await parserService.activateRuleSet(cloned.data.id);
-    expect(activated.ok).toBe(true);
-
-    const prev = await testDb.parsingRuleSets.get(v1.id);
-    const now = await testDb.parsingRuleSets.get(cloned.data.id);
-    expect(prev?.status).toBe('archived');
-    expect(now?.status).toBe('active');
-  });
-
-  it('VersionHistory marks the current version', async () => {
-    const rule = await seedRule({ name: 'CurrentMarker' });
-    await parserService.updateRuleSet(rule.id, selectors, mappings);
-    const updated = await testDb.parsingRuleSets.get(rule.id);
-    expect(updated?.ruleVersion).toBe(2);
-
-    const { findAllByTestId, findByText } = render(VersionHistory, { props: { rule: updated! } });
-    const rows = await findAllByTestId('version-row');
-    expect(rows.length).toBe(2);
-
-    const currentLabel = await findByText('current');
-    expect(currentLabel).toBeTruthy();
-  });
-
-  it('edit button offers a new-version path for active rules', async () => {
-    const rule = await seedRule({ name: 'ActiveRule' });
-    await testDb.parsingRuleSets.update(rule.id, { status: 'active' });
+  it('shows the clone-as-new guidance when editing an active rule from the route', async () => {
+    await seedRule({ name: 'ActiveRule', status: 'active' });
 
     const { findAllByTestId, findByTestId } = render(ParserRules);
+    await fireEvent.click((await findAllByTestId('rule-edit'))[0]);
 
-    const editBtns = await findAllByTestId('rule-edit');
-    expect(editBtns.length).toBeGreaterThan(0);
-
-    await fireEvent.click(editBtns[0]);
     const editPanel = await findByTestId('edit-panel');
     expect(editPanel.textContent).toMatch(/new rule/i);
+    expect(editPanel.textContent).toMatch(/active/i);
   });
 });

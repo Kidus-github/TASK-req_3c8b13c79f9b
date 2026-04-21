@@ -2,13 +2,12 @@
 # ============================================================================
 # NebulaForge Creator Nebula - Global Test Runner
 # ============================================================================
-# Runs all frontend unit tests inside Docker for environment isolation.
-# No local dependencies required beyond Docker.
+# Runs the frontend Vitest suite with coverage inside Docker.
 #
 # Usage: ./run_tests.sh
 # ============================================================================
 
-set -e
+set -euo pipefail
 
 echo "============================================"
 echo " NebulaForge Creator Nebula - Test Suite"
@@ -17,34 +16,16 @@ echo ""
 
 REPO_DIR="$(cd "$(dirname "$0")" && pwd)"
 
-# Run tests inside Docker for full isolation.
-# Mount the whole repo (not just frontend/) so tests that read README.md and
-# docker-compose.yml via `path.resolve(frontendRoot, '..')` resolve them at
-# /app (repo root inside the container), matching the on-disk layout.
-echo "[frontend][tests] Running frontend tests in Docker..."
+echo "[frontend][tests] Running Vitest with coverage inside Docker (node:20-alpine)..."
 echo ""
 
-docker run --rm \
-  -v "$REPO_DIR":/app \
-  -w /app/frontend \
-  node:20-alpine \
-  sh -c "npm ci --silent 2>/dev/null && npx vitest run --coverage --reporter=verbose 2>&1"
-
-TEST_EXIT_CODE=$?
+cd "$REPO_DIR"
+docker compose --profile test run --rm frontend-test
 
 echo ""
 echo "============================================"
 echo " Test Summary"
 echo "============================================"
-
-if [ $TEST_EXIT_CODE -eq 0 ]; then
-  echo " Status:   PASSED"
-  echo " Frontend: All tests passed"
-else
-  echo " Status:   FAILED"
-  echo " Frontend: Some tests failed (exit code: $TEST_EXIT_CODE)"
-fi
-
+echo " Status:   PASSED"
+echo " Frontend: All tests passed"
 echo "============================================"
-
-exit $TEST_EXIT_CODE

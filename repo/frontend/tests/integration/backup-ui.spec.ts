@@ -126,7 +126,8 @@ describe('BackupExport', () => {
     const [pass, confirm] = container.querySelectorAll('input[type="password"]') as NodeListOf<HTMLInputElement>;
     await fireEvent.input(pass, { target: { value: 'correct-horse' } });
     await fireEvent.input(confirm, { target: { value: 'correct-horse' } });
-    const btn = getByText('Export Backup', { selector: 'button' });
+    const btn = getByText('Export Backup', { selector: 'button' }) as HTMLButtonElement;
+    await waitFor(() => expect(btn.disabled).toBe(false));
     await fireEvent.click(btn);
     await waitFor(() => expect(createUrlSpy).toHaveBeenCalled());
   });

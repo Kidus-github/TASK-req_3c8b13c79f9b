@@ -355,7 +355,7 @@ async function runParserFullExtract(jobId: string, payload: ParserExtractPayload
   // JSON path
   try {
     const parsed = JSON.parse(payload.content) as unknown;
-    const items = evaluateJsonPath(parsed, payload.containerSelector);
+    const items = evaluateJsonPath(parsed, payload.containerSelector).flatMap(v => Array.isArray(v) ? v : [v]);
     const rows: Record<string, string>[] = [];
     for (let i = 0; i < items.length; i++) {
       if (cancelledJobs.has(jobId)) break;

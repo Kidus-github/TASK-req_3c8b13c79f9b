@@ -1,7 +1,8 @@
 /**
- * Branch coverage filler for backup.service: exercises restoreBackup with
- * every conditional branch (cards merge / replace / newer-wins, all the
- * supplemental collections, preferences, thumbnails, rawImportFiles).
+ * Additional restore and validation behaviors for backup.service.
+ *
+ * These cases exercise merge-vs-replace semantics, linked-record cleanup,
+ * supplemental collection restoration, and invalid backup payload rejection.
  */
 import { describe, it, expect, beforeEach, afterEach } from 'vitest';
 import { type NebulaDB, setDbFactory } from '$lib/db/connection';

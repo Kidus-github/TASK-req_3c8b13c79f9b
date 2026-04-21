@@ -37,7 +37,7 @@ const BUNDLES: Record<LanguageCode, StringBundle> = {
     'nav.cards': 'Tarjetas',
     'nav.starmap': 'Mapa Estelar',
     'nav.search': 'Buscar',
-    'nav.voyage': 'Travesía',
+    'nav.voyage': 'Travesia',
     'nav.import': 'Importar',
     'nav.backup': 'Respaldo',
     'nav.parserRules': 'Reglas',
@@ -48,13 +48,13 @@ const BUNDLES: Record<LanguageCode, StringBundle> = {
     'settings.subtitle': 'Las preferencias se guardan localmente en este dispositivo.',
     'settings.appearance': 'Apariencia',
     'settings.theme': 'Tema',
-    'settings.navigation': 'Diseño de Navegación',
-    'settings.lighting': 'Iluminación del Mapa',
+    'settings.navigation': 'Diseno de Navegacion',
+    'settings.lighting': 'Iluminacion del Mapa',
     'settings.language': 'Idioma',
     'settings.footer': 'Texto del pie',
-    'settings.carousel': 'Imágenes del carrusel',
+    'settings.carousel': 'Imagenes del carrusel',
     'settings.carousel.add': 'Agregar imagen',
-    'settings.carousel.empty': 'Sin imágenes configuradas.',
+    'settings.carousel.empty': 'Sin imagenes configuradas.',
     'settings.defaults': 'Valores predeterminados',
     'settings.defaultSort': 'Orden predeterminado',
     'settings.reset': 'Restablecer',
@@ -64,11 +64,11 @@ const BUNDLES: Record<LanguageCode, StringBundle> = {
 
 export const SUPPORTED_LANGUAGES: { code: LanguageCode; label: string }[] = [
   { code: 'en', label: 'English' },
-  { code: 'es', label: 'Español' },
+  { code: 'es', label: 'Espanol' },
 ];
 
 export function translate(lang: LanguageCode, key: string): string {
   return BUNDLES[lang]?.[key] ?? BUNDLES.en[key] ?? key;
 }
 
-export const t = derived(preferences, $prefs => (key: string) => translate($prefs.language, key));
+export const t = derived(preferences, ($prefs) => (key: string) => translate($prefs.language, key));

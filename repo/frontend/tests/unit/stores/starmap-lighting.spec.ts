@@ -1,6 +1,34 @@
 import { describe, it, expect, beforeEach, vi } from 'vitest';
 import { get } from 'svelte/store';
 
+vi.mock('three/addons/controls/OrbitControls.js', () => ({
+  OrbitControls: class {
+    target = { x: 0, y: 0, z: 0, set(x: number, y: number, z: number) { this.x = x; this.y = y; this.z = z; } };
+    enableDamping = true;
+    dampingFactor = 0.05;
+    minDistance = 5;
+    maxDistance = 200;
+    update(): void {}
+    dispose(): void {}
+  }
+}));
+
+vi.mock('three', async (importOriginal) => {
+  const actual = await importOriginal<typeof import('three')>();
+
+  class FakeRenderer {
+    setPixelRatio(): void {}
+    setSize(): void {}
+    render(): void {}
+    dispose(): void {}
+  }
+
+  return {
+    ...actual,
+    WebGLRenderer: FakeRenderer,
+  };
+});
+
 describe('star map lighting integration', () => {
   beforeEach(() => {
     localStorage.clear();
@@ -40,15 +68,10 @@ describe('star map lighting integration', () => {
     const canvas = document.createElement('canvas');
     canvas.width = 200;
     canvas.height = 200;
+    Object.defineProperty(canvas, 'clientWidth', { value: 200, configurable: true });
+    Object.defineProperty(canvas, 'clientHeight', { value: 200, configurable: true });
 
-    let sm: InstanceType<typeof SceneManager>;
-    try {
-      sm = new SceneManager(canvas);
-    } catch {
-      // WebGL context may be unavailable in jsdom; the wiring is still covered
-      // by the preferences-store integration tests above.
-      return;
-    }
+    const sm = new SceneManager(canvas);
 
     sm.setLighting('aurora');
     // @ts-expect-error poking the private scene for assertion

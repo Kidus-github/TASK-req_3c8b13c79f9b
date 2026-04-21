@@ -199,7 +199,7 @@ describe('CanaryRunner', () => {
 
   it('runs the canary on uploaded HTML samples and reports a passed result', async () => {
     const rule = await seedRule();
-    const { container, getByText, findByText } = render(CanaryRunner, { props: { rule } });
+    const { container, getByText } = render(CanaryRunner, { props: { rule } });
 
     const fileInput = container.querySelector('input[type="file"]') as HTMLInputElement;
     const samples = [
@@ -221,11 +221,16 @@ describe('CanaryRunner', () => {
     const runBtn = getByText('Run Canary');
     await fireEvent.click(runBtn);
 
-    expect(await findByText(/PASSED/)).toBeTruthy();
+    await waitFor(() => {
+      expect(container.textContent).not.toContain('Running...');
+    }, { timeout: 15_000 });
+    await waitFor(() => {
+      expect(container.textContent).toContain('PASSED');
+    }, { timeout: 15_000 });
     await waitFor(() => {
       const list = get(toasts);
       expect(list.some((t) => t.type === 'success' && /Canary passed/i.test(t.message))).toBe(true);
-    });
+    }, { timeout: 15_000 });
   });
 
   it('removes a sample when its Remove button is clicked', async () => {

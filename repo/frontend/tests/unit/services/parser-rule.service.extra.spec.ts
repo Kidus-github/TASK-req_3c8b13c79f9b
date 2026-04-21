@@ -1,7 +1,7 @@
 /**
- * Branch coverage filler for parser-rule.service: error paths, archive,
- * archive-on-activate, runCanary preconditions, defaultExtract / JSON snapshot
- * extraction edge cases.
+ * Additional parser-rule.service behaviors around lifecycle guards,
+ * activation/archive transitions, canary preconditions, and JSON extraction
+ * edge cases.
  */
 import { describe, it, expect, beforeEach, afterEach } from 'vitest';
 import { type NebulaDB, setDbFactory } from '$lib/db/connection';

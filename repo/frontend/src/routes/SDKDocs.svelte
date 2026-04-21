@@ -1,28 +1,39 @@
 <script lang="ts">
+  import { pushToast } from '$lib/stores/toast.store';
+
   const SDK_SPEC_URL = '/sdk/openapi-v1.json';
   const SDK_BUNDLE_URL = '/sdk/nebulaforge-sdk.js';
   const SDK_SPEC_VERSION = '1.1.0';
 
-  async function downloadSpec() {
-    const res = await fetch(SDK_SPEC_URL);
+  async function downloadAsset(url: string, filename: string) {
+    const res = await fetch(url);
+    if (!res.ok) {
+      throw new Error(`Download failed (${res.status})`);
+    }
+
     const blob = await res.blob();
     const url = URL.createObjectURL(blob);
     const a = document.createElement('a');
     a.href = url;
-    a.download = `nebulaforge-sdk-v${SDK_SPEC_VERSION}.json`;
+    a.download = filename;
     a.click();
     URL.revokeObjectURL(url);
   }
 
+  async function downloadSpec() {
+    try {
+      await downloadAsset(SDK_SPEC_URL, `nebulaforge-sdk-v${SDK_SPEC_VERSION}.json`);
+    } catch (err) {
+      pushToast(`Failed to download SDK spec: ${(err as Error).message}`, 'error');
+    }
+  }
+
   async function downloadBundle() {
-    const res = await fetch(SDK_BUNDLE_URL);
-    const blob = await res.blob();
-    const url = URL.createObjectURL(blob);
-    const a = document.createElement('a');
-    a.href = url;
-    a.download = 'nebulaforge-sdk.js';
-    a.click();
-    URL.revokeObjectURL(url);
+    try {
+      await downloadAsset(SDK_BUNDLE_URL, 'nebulaforge-sdk.js');
+    } catch (err) {
+      pushToast(`Failed to download SDK bundle: ${(err as Error).message}`, 'error');
+    }
   }
 
   const sdkCode = `<script src="/sdk/nebulaforge-sdk.js"><\/script>

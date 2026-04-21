@@ -3,6 +3,8 @@ import { createTestDb, destroyTestDb } from '../../helpers/db-factory';
 import { type NebulaDB, setDbFactory } from '$lib/db/connection';
 import * as searchService from '$lib/services/search.service';
 import * as cardService from '$lib/services/card.service';
+import { setWorkerFactory, __resetForTests } from '$lib/services/queue-runner.service';
+import { fakeWorkerFactory } from '../../helpers/fake-worker';
 import type { SearchQuery } from '$lib/types/search';
 
 let testDb: NebulaDB;
@@ -11,9 +13,11 @@ const PROFILE_ID = 'test-profile';
 beforeEach(() => {
   testDb = createTestDb();
   setDbFactory(() => testDb);
+  setWorkerFactory(() => fakeWorkerFactory() as unknown as Worker);
 });
 
 afterEach(async () => {
+  __resetForTests();
   setDbFactory(null);
   await destroyTestDb(testDb);
 });
@@ -151,6 +155,37 @@ describe('search.service', () => {
       expect(hits[0].cardId).toBe(c1.id);
       expect(hits[1].cardId).toBe(c2.id);
     });
+
+    it('treats stop-word-only queries as an empty query and still honors filters', async () => {
+      const nature = await createAndIndex('Sunset Photography', 'Golden hour study', ['nature'], 5);
+      await createAndIndex('Coffee Notes', 'Brew ratios', ['food'], 2);
+
+      const query: SearchQuery = {
+        queryText: 'the and of',
+        filters: { tags: ['nature'], moodMax: 5 },
+        sort: { field: 'title', direction: 'asc' },
+      };
+
+      const hits = await searchService.searchCards(query, PROFILE_ID);
+      expect(hits).toHaveLength(1);
+      expect(hits[0].cardId).toBe(nature.id);
+      expect(hits[0].score).toBe(0);
+    });
+
+    it('matches partial tokens and can sort by mood descending', async () => {
+      const highMood = await createAndIndex('Sunstone Memo', 'A bright sketchbook entry', ['design'], 5);
+      const lowMood = await createAndIndex('Sunbeam Ledger', 'A calmer body match', ['design'], 2);
+
+      const query: SearchQuery = {
+        queryText: 'sun',
+        filters: {},
+        sort: { field: 'mood', direction: 'desc' },
+      };
+
+      const hits = await searchService.searchCards(query, PROFILE_ID);
+      expect(hits.map((hit) => hit.cardId)).toEqual([highMood.id, lowMood.id]);
+      expect(hits[0].matchedFields).toContain('title');
+    });
   });
 
   describe('rebuildSearchIndex', () => {
@@ -170,6 +205,36 @@ describe('search.service', () => {
 
       const statsAfter = await searchService.getSearchIndexStats();
       expect(statsAfter.totalRecords).toBe(2);
+    });
+
+    it('removes stale search records and excludes soft-deleted cards during rebuild', async () => {
+      const keep = await createAndIndex('Keep Me', 'Body', ['tag']);
+      const removed = await createAndIndex('Remove Me', 'Body', ['tag']);
+      await testDb.cards.update(removed.id, { deletedAt: Date.now() });
+
+      const cards = await testDb.cards.toArray();
+      const count = await searchService.rebuildSearchIndex(cards, PROFILE_ID);
+
+      expect(count).toBe(1);
+      expect(await testDb.searchIndex.get(keep.id)).toBeTruthy();
+      expect(await testDb.searchIndex.get(removed.id)).toBeUndefined();
+    });
+
+    it('rebuilds through the worker path and reports per-profile stats', async () => {
+      const card = await createAndIndex('Orbit Log', 'Telemetry snapshot', ['flight']);
+      await searchService.removeFromSearchIndex(card.id);
+      expect((await searchService.getSearchIndexStats(PROFILE_ID)).totalRecords).toBe(0);
+
+      const cards = await testDb.cards.where('profileId').equals(PROFILE_ID).toArray();
+      const rebuilt = await searchService.rebuildSearchIndexViaWorker(cards, PROFILE_ID);
+
+      expect(rebuilt.indexed).toBe(1);
+      expect(rebuilt.jobId).toBeTruthy();
+      const stats = await searchService.getSearchIndexStats(PROFILE_ID);
+      expect(stats.totalRecords).toBe(1);
+      const refreshed = await testDb.searchIndex.get(card.id);
+      expect(refreshed?.profileId).toBe(PROFILE_ID);
+      expect(Object.keys(refreshed?.tokenMap ?? {})).toContain('title:orbit');
     });
   });
 

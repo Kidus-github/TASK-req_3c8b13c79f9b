@@ -35,3 +35,16 @@ services:
     volumes:
       - ./frontend/playwright-report:/app/playwright-report
       - ./frontend/test-results:/app/test-results
+
+  frontend-test:
+    profiles: ["test"]
+    image: node:20-alpine
+    working_dir: /app
+    volumes:
+      - ./frontend:/app
+    command: >
+      sh -lc "
+        npm ci &&
+        mkdir -p coverage/.tmp &&
+        npm run test -- --reporter=verbose
+      "

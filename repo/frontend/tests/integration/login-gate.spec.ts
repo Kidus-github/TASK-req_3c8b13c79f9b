@@ -44,8 +44,7 @@ afterEach(async () => {
 describe('LoginGate', () => {
   it('defaults to register mode on a fresh device (no profile exists)', async () => {
     const { findByRole } = render(LoginGate);
-    // On fresh device, `hasAnyProfile` returns false and the gate should offer
-    // Create Local Profile as the submit button.
+    await waitFor(() => expect(get(registering)).toBe(true));
     const submit = await findByRole('button', { name: /Create Local Profile/i });
     expect(submit).toBeTruthy();
   });

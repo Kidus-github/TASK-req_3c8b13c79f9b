@@ -46,6 +46,16 @@ test.describe('SDK Docs download flow', () => {
     expect(json.info ?? json.openapi ?? json.swagger).toBeTruthy();
   });
 
+  test('serves the SDK bundle under /sdk/nebulaforge-sdk.js with a JS content-type and a NebulaForge-exporting body', async ({ request }) => {
+    const res = await request.get('/sdk/nebulaforge-sdk.js');
+    expect(res.status()).toBe(200);
+    const ct = res.headers()['content-type'] ?? '';
+    expect(ct).toMatch(/javascript|ecmascript/i);
+    const body = await res.text();
+    expect(body.length).toBeGreaterThan(0);
+    expect(body).toMatch(/NebulaForge/);
+  });
+
   test('Download Spec triggers a file download', async ({ page }) => {
     const [download] = await Promise.all([
       page.waitForEvent('download'),

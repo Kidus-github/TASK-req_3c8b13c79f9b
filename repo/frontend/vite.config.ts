@@ -39,7 +39,7 @@ export default defineConfig({
     coverage: {
       provider: 'v8',
       reporter: ['text', 'text-summary', 'html', 'json-summary'],
-      reportsDirectory: './coverage',
+      reportsDirectory: path.resolve(process.cwd(), 'coverage'),
       include: [
         'src/lib/config/**/*.ts',
         'src/lib/services/**/*.ts',
